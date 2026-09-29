@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Arena - Sinh Tồn BO3 (Đa Ngành)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Inter:wght@400;600&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; overflow-x: hidden; }
+        .font-oswald { font-family: 'Oswald', sans-serif; }
+        .neon-text { text-shadow: 0 0 10px rgba(59, 130, 246, 0.8), 0 0 20px rgba(59, 130, 246, 0.4); }
+        .neon-text-red { text-shadow: 0 0 10px rgba(239, 68, 68, 0.8), 0 0 20px rgba(239, 68, 68, 0.4); }
+        .neon-text-gold { text-shadow: 0 0 10px rgba(234, 179, 8, 0.8), 0 0 20px rgba(234, 179, 8, 0.4); }
+        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        
+        /* Chấm điểm BO3 */
+        .pip { width: 16px; height: 16px; border-radius: 50%; background: #334155; display: inline-block; margin: 0 4px; transition: all 0.3s; }
+        .pip.active-gold { background: #eab308; box-shadow: 0 0 10px #eab308; }
+        .pip.active-red { background: #ef4444; box-shadow: 0 0 10px #ef4444; }
+
+        /* Slider Styles */
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: #ffffff; cursor: pointer; margin-top: -6px; box-shadow: 0 0 5px rgba(0,0,0,0.5); }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #475569; border-radius: 2px; }
+        input[type=range]:disabled::-webkit-slider-thumb { background: #94a3b8; cursor: not-allowed; }
+        
+        .locked-panel { opacity: 0.7; pointer-events: none; filter: grayscale(30%); }
+
+        /* Custom Scrollbar cho Text dài */
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); border-radius: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 4px; }
+
+        /* Mega Kill Text */
+        .mega-kill {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0);
+            font-size: 8rem; font-family: 'Oswald', sans-serif; font-weight: 900;
+            color: #ff0055; text-shadow: 4px 4px 0px #fff, 0 0 50px #ff0055;
+            z-index: 100; opacity: 0; pointer-events: none;
+        }
+        @keyframes megaKillAnim {
+            0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+            20% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+            40% { transform: translate(-50%, -50%) scale(0.9); opacity: 1; }
+            60% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+            80% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; filter: blur(10px); }
+        }
+        .animate-mega-kill { animation: megaKillAnim 2s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
+        
+        .match-over { filter: grayscale(60%) blur(2px); pointer-events: none; transition: 1.5s ease-in-out; }
+        .tab-btn { transition: all 0.2s; }
+        .tab-btn.active { border-bottom: 4px solid #3b82f6; color: #60a5fa; font-weight: bold; background: rgba(59, 130, 246, 0.1); }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center py-6">
+
+    <div id="mega-kill-text" class="mega-kill">MEGA KILL!</div>
+
+    <!-- TABS -->
+    <div class="w-full max-w-7xl flex justify-center mb-6 border-b border-gray-700">
+        <button onclick="switchCategory('oto')" id="tab-oto" class="tab-btn active px-8 py-3 text-lg font-oswald text-gray-400 hover:text-white">🔧 CÔNG NGHỆ Ô TÔ</button>
+        <button onclick="switchCategory('ngonngu')" id="tab-ngonngu" class="tab-btn px-8 py-3 text-lg font-oswald text-gray-400 hover:text-white">📝 NGÔN NGỮ</button>
+        <button onclick="switchCategory('dohoa')" id="tab-dohoa" class="tab-btn px-8 py-3 text-lg font-oswald text-gray-400 hover:text-white">🎨 THIẾT KẾ ĐỒ HỌA</button>
+    </div>
+
+    <div class="max-w-7xl w-full px-4" id="main-arena">
+        <!-- Hàng chờ & Tỉ số -->
+        <div class="flex justify-between items-end mb-6">
+            <div class="glass-panel px-4 py-2 rounded-lg">
+                <span class="text-xs text-gray-400 block mb-1">ĐANG CHỜ LÊN ĐÀI (QUEUE)</span>
+                <div id="queue-display" class="flex gap-2 text-sm font-semibold text-gray-300"></div>
+            </div>
+
+            <div class="text-center bg-gray-900 px-8 py-3 rounded-xl border border-gray-700 shadow-2xl">
+                <p class="text-xs text-gray-500 font-bold tracking-widest mb-2">TỈ SỐ BO3</p>
+                <div class="flex items-center gap-6">
+                    <div class="flex gap-1" id="champ-pips">
+                        <span class="pip" id="cp1"></span>
+                        <span class="pip" id="cp2"></span>
+                    </div>
+                    <span class="text-2xl font-black text-gray-600 font-oswald">VS</span>
+                    <div class="flex gap-1" id="chall-pips">
+                        <span class="pip" id="chp1"></span>
+                        <span class="pip" id="chp2"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Màn hình quay câu hỏi -->
+        <div class="glass-panel p-6 rounded-xl mb-6 text-center border border-blue-900 relative overflow-hidden group">
+            <div class="absolute inset-0 bg-blue-600/10 opacity-0 group-hover:opacity-100 transition duration-500 pointer-events-none"></div>
+            <h3 class="text-sm font-bold text-blue-400 mb-2">ĐỀ BÀI VÒNG <span id="round-number">1</span></h3>
+            
+            <div id="question-text" class="text-base text-left text-gray-200 mb-4 h-40 overflow-y-auto custom-scroll bg-gray-900/60 p-4 rounded border border-gray-700 whitespace-pre-line font-medium leading-relaxed">
+                Bấm "Lấy Câu Hỏi" để hệ thống chọn ngẫu nhiên...
+            </div>
+
+            <button id="spin-btn" onclick="getQuestion()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-8 rounded-full shadow-[0_0_15px_rgba(37,99,235,0.5)] transition-all mt-2 relative z-10 cursor-pointer">
+                Lấy Câu Hỏi
+            </button>
+            <p id="question-status" class="text-xs text-gray-500 mt-2"></p>
+        </div>
+
+        <!-- Sàn đấu -->
+        <div class="flex flex-col lg:flex-row gap-6">
+            
+            <!-- GÓC VÔ ĐỊCH -->
+            <div class="flex-1 glass-panel p-1 rounded-xl shadow-2xl relative" id="panel-champ">
+                <div class="absolute -top-3 left-4 bg-yellow-500 text-black text-xs font-black px-3 py-1 rounded shadow-[0_0_10px_#eab308]">
+                    ĐƯƠNG KIM VÔ ĐỊCH
+                </div>
+                <div class="absolute -top-3 right-4 bg-gray-800 border border-yellow-500 text-yellow-400 text-xs font-bold px-2 py-1 rounded">
+                    Chuỗi thắng: <span id="champ-streak">2</span>
+                </div>
+                <div class="bg-gray-800 rounded-lg p-5">
+                    <h2 class="text-2xl font-oswald text-yellow-400 mb-4 flex items-center gap-2 neon-text-gold">
+                        👑 <span id="champ-name">Copilot</span>
+                        <span class="text-[10px] bg-green-600/20 text-green-400 border border-green-600/50 px-2 py-0.5 rounded-full font-sans tracking-wide">Free Tier</span>
+                    </h2>
+                    
+                    <div id="champ-badge-locked" class="hidden mb-2 bg-yellow-900/30 text-yellow-500 text-xs py-1 px-2 rounded border border-yellow-600/30 text-center font-bold">
+                        🔒 Đã khóa điểm (Kế thừa từ trận trước)
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 mb-4" id="champ-sliders">
+                        <div class="bg-gray-900 p-3 rounded">
+                            <label class="text-xs text-gray-400 flex justify-between">Chuyên môn <span><span id="c_val_1">0</span>/10</span></label>
+                            <input type="range" id="c_s1" min="0" max="10" value="0" oninput="updateScore('champ')">
+                        </div>
+                        <div class="bg-gray-900 p-3 rounded">
+                            <label class="text-xs text-gray-400 flex justify-between">Bám sát Prompt <span><span id="c_val_2">0</span>/10</span></label>
+                            <input type="range" id="c_s2" min="0" max="10" value="0" oninput="updateScore('champ')">
+                        </div>
+                        <div class="bg-gray-900 p-3 rounded">
+                            <label class="text-xs text-gray-400 flex justify-between">Trình bày <span><span id="c_val_3">0</span>/10</span></label>
+                            <input type="range" id="c_s3" min="0" max="10" value="0" oninput="updateScore('champ')">
+                        </div>
+                        <div class="bg-gray-900 p-3 rounded">
+                            <label class="text-xs text-gray-400 flex justify-between">Thực tiễn <span><span id="c_val_4">0</span>/10</span></label>
+                            <input type="range" id="c_s4" min="0" max="10" value="0" oninput="updateScore('champ')">
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-sm text-gray-400">Tổng điểm:</span>
+                        <span class="text-3xl font-black text-yellow-400 ml-2" id="champ-total">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GÓC THÁCH THỨC -->
+            <div class="flex-1 glass-panel p-1 rounded-xl shadow-2xl relative" id="panel-chall">
+                <div class="absolute -top-3 right-4 bg-red-600 text-white text-xs font-black px-3 py-1 rounded shadow-[0_0_10px_#ef4444]">
+                    KẺ THÁCH THỨC
+                </div>
+                <div class="bg-gray-800 rounded-lg p-5">
+                    <h2 class="text-2xl font-oswald text-red-500 mb-4 flex items-center justify-end gap-2 neon-text-red">
+                        <span class="text-[10px] bg-green-600/20 text-green-400 border border-green-600/50 px-2 py-0.5 rounded-full font-sans tracking-wide">Free Tier</span>
+                        <span id="chall-name">Perplexity</span> ⚔️
+                    </h2>
+                    
+                    <div class="grid grid-cols-2 gap-3 mb-4 mt-8" id="chall-sliders">
+                        <div class="bg-gray-900 p-3 rounded">
+                            <label class="text-xs text-gray-400 flex justify-between">Chuyên môn <span><span id="ch_val_1">0</span>/10</span></label>
+                            <input type="range" id="ch_s1" min="0" max="10" value="0" oninput="updateScore('chall')">
+                        </div>
+                        <div class="bg-gray-900 p-3 rounded">
+                            <label class="text-xs text-gray-400 flex justify-between">Bám sát Prompt <span><span id="ch_val_2">0</span>/10</span></label>
+                            <input type="range" id="ch_s2" min="0" max="10" value="0" oninput="updateScore('chall')">
+                        </div>
+                        <div class="bg-gray-900 p-3 rounded">
+                            <label class="text-xs text-gray-400 flex justify-between">Trình bày <span><span id="ch_val_3">0</span>/10</span></label>
+                            <input type="range" id="ch_s3" min="0" max="10" value="0" oninput="updateScore('chall')">
+                        </div>
+                        <div class="bg-gray-900 p-3 rounded">
+                            <label class="text-xs text-gray-400 flex justify-between">Thực tiễn <span><span id="ch_val_4">0</span>/10</span></label>
+                            <input type="range" id="ch_s4" min="0" max="10" value="0" oninput="updateScore('chall')">
+                        </div>
+                    </div>
+                    <div class="text-left">
+                        <span class="text-sm text-gray-400">Tổng điểm:</span>
+                        <span class="text-3xl font-black text-red-500 ml-2" id="chall-total">0</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="text-center mt-8 pb-10" id="action-area">
+            <button id="btn-chot" onclick="chotDiem()" class="bg-gradient-to-r from-gray-700 to-gray-600 hover:from-green-600 hover:to-emerald-600 text-white font-black py-4 px-12 rounded-full shadow-lg transition-all text-xl tracking-widest hidden">
+                CHỐT ĐIỂM ROUND NÀY
+            </button>
+            <button id="btn-next" onclick="startNextMatch()" class="bg-purple-600 hover:bg-purple-500 text-white font-black py-4 px-12 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.6)] transition-all text-xl tracking-widest hidden">
+                GHÉP TRẬN BO3 MỚI
+            </button>
+        </div>
+    </div>
+
+    <!-- Popup Result -->
+    <div id="popup-result" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-gray-900 border-2 rounded-2xl p-8 text-center transform scale-95 transition-transform duration-300" id="popup-box">
+            <h2 class="text-4xl font-oswald mb-2" id="popup-title">...</h2>
+            <p class="text-gray-400 mb-6" id="popup-desc">...</p>
+            <button onclick="closePopup()" class="bg-white text-black font-bold py-2 px-6 rounded-full hover:bg-gray-200">Tiếp tục</button>
+        </div>
+    </div>
+
+<script>
+    const data = {
+        'oto': {
+            questions: [
+                `Bạn là kỹ sư công nghệ ô tô có 5 năm kinh nghiệm. Hãy giải thích hệ thống phun nhiên liệu điện tử EFI trên động cơ xăng 4 kỳ cho một sinh viên năm nhất chưa có nền tảng tốt.`,
+                `Một chiếc ô tô động cơ xăng có các triệu chứng: khó nổ vào buổi sáng, vòng tua không ổn định khi không tải, tăng tốc bị hụt và mức tiêu hao nhiên liệu tăng. Không được giả định ngay một nguyên nhân duy nhất.`,
+                `Một động cơ 4 xi-lanh có dung tích công tác tổng cộng 2.0 L, đường kính xi-lanh 86 mm, hành trình piston 86 mm. Động cơ hoạt động ở 3.000 vòng/phút. Hãy tính: 
+- Dung tích công tác lý thuyết. 
+- Thể tích công tác của một xi-lanh. 
+- Tốc độ trung bình của piston. 
+- Số chu kỳ công tác hoàn chỉnh của mỗi xi-lanh trong 1 phút đối với động cơ 4 kỳ.`,
+                `Hãy đóng vai kỹ thuật viên chẩn đoán ô tô. Tôi cung cấp các dữ liệu OBD-II giả định sau:
+- RPM: 800 rpm
+- Coolant: 92°C
+- MAF: 3.5 g/s
+- STFT: +18% | LTFT: +12%
+- O2 Sensor: dao động chậm
+- Engine Load: 28%
+- DTC: P0171
+
+Hãy:
+- Giải thích từng thông số.
+- Phân tích mối liên hệ giữa chúng.
+- Đưa ra các giả thuyết nguyên nhân.
+- Xếp thứ tự kiểm tra.
+- Cho biết không thể kết luận điều gì chỉ từ dữ liệu này.
+Không được coi DTC là nguyên nhân trực tiếp nếu chưa có bằng chứng.`,
+                `Hãy hướng dẫn một sinh viên năm nhất kiểm tra hệ thống làm mát của ô tô bằng quy trình thực hành an toàn. Chia thành:
+1. Chuẩn bị.
+2. Kiểm tra bằng mắt.
+3. Kiểm tra mức nước làm mát.
+4. Kiểm tra rò rỉ.
+5. Kiểm tra quạt.
+6. Kiểm tra thermostat.
+7. Kiểm tra nhiệt độ vận hành.
+8. Kết luận.
+Với mỗi bước, nói rõ: làm gì – vì sao – kết quả bình thường – dấu hiệu bất thường.
+Không hướng dẫn thao tác có nguy cơ gây bỏng hoặc chấn thương khi hệ thống đang nóng.`,
+                `Một khách hàng mang xe đến xưởng và nói: “Xe chạy bình thường trong thành phố nhưng khi leo dốc hoặc chở đủ người thì máy yếu rõ rệt.”
+Hãy xử lý tình huống như một kỹ thuật viên thực tế:
+- Những hệ thống nào có thể liên quan?
+- Cần hỏi khách hàng những câu hỏi nào?
+- Kiểm tra gì trước?
+- Dữ liệu nào cần lấy từ OBD?
+- Khi nào kiểm tra nhiên liệu?
+- Khi nào kiểm tra đánh lửa?
+- Khi nào nghi ngờ vấn đề cơ khí động cơ?
+Hãy xây dựng một quy trình chẩn đoán sao cho không thay phụ tùng khi chưa có bằng chứng.`
+            ],
+            queue: ["Gemini 1.5", "ChatGPT-4o Free", "Claude 3 Haiku", "Poe Assistant"],
+            champ: { name: "Copilot", streak: 2, history: [] },
+            chall: { name: "Perplexity", history: [] }
+        },
+        'ngonngu': {
+            questions: [
+                `Hãy đánh giá đoạn tiếng Anh sau như một giáo viên tiếng Anh:
+
+“I have studied English for many years, but I still feel difficult when I need to speak with foreigners. I can understand some words, but when they speak fast, I cannot catch what they say.”
+
+Hãy:
+- Chỉ ra lỗi ngữ pháp.
+- Chỉ ra cách diễn đạt thiếu tự nhiên.
+- Giải thích tại sao.
+- Viết lại thành phiên bản tự nhiên ở trình độ B1.
+- Viết lại lần nữa ở trình độ B2.
+Không chỉ sửa lỗi; hãy giải thích sự khác nhau giữa hai phiên bản.`,
+                
+                `Dịch đoạn sau từ tiếng Việt sang tiếng Anh:
+“Tôi không nghĩ rằng việc học một kỹ năng mới chỉ đơn giản là ghi nhớ thật nhiều kiến thức. Điều quan trọng hơn là phải biết cách áp dụng nó vào những vấn đề thực tế.”
+
+Hãy đưa ra:
+- Bản dịch sát nghĩa.
+- Bản dịch tự nhiên như người bản xứ.
+- Bản dịch phù hợp với văn phong học thuật.
+Sau đó giải thích những lựa chọn từ vựng và cấu trúc quan trọng.`,
+                
+                `Viết lại câu sau theo 5 phong cách khác nhau:
+“I want to ask you about the project because I don't understand what I need to do.”
+
+Các phiên bản:
+1. Nói với bạn thân.
+2. Nói với giáo viên.
+3. Gửi email cho giảng viên.
+4. Nói với quản lý tại nơi làm việc.
+5. Cách lịch sự nhưng tự nhiên trong môi trường quốc tế.
+Giải thích sự khác nhau về mức độ trang trọng.`,
+                
+                `Hãy mô phỏng một cuộc hội thoại bằng tiếng Anh giữa một sinh viên Việt Nam và một người nước ngoài lần đầu gặp nhau tại English Club.
+Mục tiêu của sinh viên:
+- Giới thiệu bản thân.
+- Nói về ngành Công nghệ Ô tô.
+- Hỏi người kia về sở thích.
+- Duy trì cuộc hội thoại ít nhất 10 lượt.
+
+Sau mỗi câu của người nước ngoài, hãy chờ tôi trả lời. Nếu câu trả lời của tôi có lỗi, không sửa ngay lập tức; hãy tiếp tục hội thoại trước, sau đó cuối cuộc hội thoại mới phân tích lỗi.`,
+                
+                `Tôi muốn học từ vựng tiếng Anh theo chủ đề automotive technology.
+Hãy tạo 10 từ/cụm từ quan trọng ở trình độ B1–B2.
+Với mỗi từ/cụm từ:
+- Nghĩa tiếng Việt.
+- Collocations phổ biến.
+- 1 câu ví dụ.
+- 1 lỗi người Việt thường mắc.
+- 1 từ/cụm từ gần nghĩa.
+
+Sau đó tạo một bài tập điền từ gồm 10 câu và không đưa đáp án ngay.`,
+                
+                `Hãy đóng vai một biên tập viên tiếng Anh.
+Tôi sẽ đưa cho bạn một đoạn văn viết bởi một sinh viên Việt Nam. Nhiệm vụ của bạn là không chỉ sửa ngữ pháp mà phải giữ nguyên ý tưởng và giọng văn của người viết.
+
+Hãy trả kết quả theo 4 phần:
+1. Original.
+2. Corrected version.
+3. Natural/native-like version.
+4. Bảng giải thích từng thay đổi quan trọng.
+Không thay đổi ý nghĩa chỉ để làm câu văn “hay” hơn.`
+            ],
+            queue: ["Copilot", "Perplexity", "Claude 3 Haiku", "Poe Assistant"],
+            champ: { name: "ChatGPT-4o Free", streak: 1, history: [] },
+            chall: { name: "Gemini 1.5", history: [] }
+        },
+        'dohoa': {
+            questions: [
+                `Bạn là graphic designer có 5 năm kinh nghiệm. Hãy xây dựng concept nhận diện cho một thương hiệu cà phê dành cho sinh viên đại học.
+Brief:
+- Khách hàng: 18–24 tuổi.
+- Giá vừa phải.
+- Không khí trẻ, năng động.
+- Thương hiệu muốn khác với phong cách “cà phê sang trọng”.
+
+Hãy tạo:
+- Brand concept.
+- 3 hướng visual khác nhau.
+- Màu chủ đạo và lý do.
+- Typography.
+- Hình ảnh/graphic elements.
+- Moodboard bằng mô tả.
+- Ví dụ ứng dụng lên ly, poster và Instagram post.
+Không sử dụng logo/thương hiệu nổi tiếng làm mẫu trực tiếp.`,
+
+                `Tôi có một poster quảng cáo kích thước A4 với các thành phần:
+- Logo ở góc trên trái.
+- Tiêu đề lớn ở giữa.
+- Hình sản phẩm chiếm khoảng 50% diện tích.
+- Mô tả sản phẩm bên dưới.
+- Giá ở góc phải dưới.
+- QR code ở góc trái dưới.
+
+Hãy phân tích thiết kế này dựa trên: Visual hierarchy, Alignment, Balance, Contrast, Whitespace, Typography, CTA.
+Sau đó đề xuất 3 cách cải thiện, giải thích tại sao.`,
+
+                `Một startup công nghệ ô tô muốn xây dựng thương hiệu với 3 giá trị:
+Precision – Technology – Reliability.
+
+Hãy xây dựng một hệ thống visual identity cơ bản gồm:
+- 3 hướng logo concept bằng mô tả.
+- Color palette.
+- Typography.
+- Graphic language.
+- Icon style.
+- Photography style.
+- Ví dụ ứng dụng lên danh thiếp, website và đồng phục.
+
+Quan trọng: giải thích tại sao mỗi lựa chọn thiết kế phù hợp với brand values.`,
+
+                `Thiết kế concept UI cho một ứng dụng đặt lịch bảo dưỡng ô tô.
+Người dùng có thể: Xem tình trạng xe, Xem lịch bảo dưỡng, Đặt lịch, Xem lịch sử sửa chữa, Nhận cảnh báo.
+
+Hãy xây dựng:
+- User flow.
+- Information architecture.
+- Wireframe bằng text.
+- Design system cơ bản.
+- Màu sắc.
+- Typography.
+- Những lỗi UX cần tránh.
+Ưu tiên trải nghiệm của người dùng phổ thông, không giả định họ hiểu thuật ngữ kỹ thuật ô tô.`,
+
+                `Tôi muốn tạo một poster quảng cáo cho một chiếc xe thể thao điện.
+Hãy viết 5 prompt tạo ảnh, mỗi prompt theo một art direction khác nhau:
+1. Cinematic advertising.
+2. Minimalist commercial.
+3. Futuristic technology.
+4. Urban lifestyle.
+5. Premium editorial.
+
+Mỗi prompt phải mô tả rõ: Subject, Composition, Camera angle, Lighting, Environment, Color mood, Typography placement, Aspect ratio.
+Sau đó giải thích yếu tố nào trong prompt có tác động lớn nhất đến kết quả hình ảnh.`,
+
+                `Khách hàng gửi brief rất mơ hồ:
+“Em làm giúp anh cái poster nhìn cho chuyên nghiệp, hiện đại, bắt mắt, màu đẹp, giống mấy thương hiệu lớn là được.”
+
+Hãy đóng vai designer chuyên nghiệp. Không bắt đầu thiết kế ngay.
+Hãy:
+- Xác định những thông tin còn thiếu.
+- Đặt tối đa 10 câu hỏi để làm rõ brief.
+- Giải thích tại sao từng câu hỏi quan trọng.
+- Sau khi có câu trả lời giả định, hãy biến brief thành một creative brief hoàn chỉnh.
+- Đưa ra tiêu chí để đánh giá thiết kế cuối cùng.`
+            ],
+            queue: ["Canva AI", "Copilot Designer", "Adobe Firefly", "Bing Image Creator"],
+            champ: { name: "Microsoft Designer", streak: 4, history: [] },
+            chall: { name: "Leonardo AI (Free)", history: [] }
+        }
+    };
+
+    let activeCategory = 'oto';
+    let currentRound = 0; 
+    let champScore = 0; 
+    let challScore = 0;
+    let currentQuestionText = "";
+    
+    function switchCategory(catId) {
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active', 'border-b-4', 'border-blue-500', 'text-blue-400', 'bg-blue-900/10'));
+        document.getElementById(`tab-${catId}`).classList.add('active', 'border-b-4', 'border-blue-500', 'text-blue-400', 'bg-blue-900/10');
+        activeCategory = catId;
+        
+        champScore = 0; challScore = 0; currentRound = 0;
+        resetPips();
+        resetSliders();
+        
+        document.getElementById('question-text').innerText = "Bấm 'Lấy Câu Hỏi' để bắt đầu trận đấu...";
+        document.getElementById('spin-btn').classList.remove('hidden');
+        document.getElementById('btn-chot').classList.add('hidden');
+        document.getElementById('btn-next').classList.add('hidden');
+        document.getElementById('main-arena').classList.remove('match-over');
+        document.getElementById('panel-champ').classList.remove('locked-panel');
+        document.getElementById('champ-badge-locked').classList.add('hidden');
+        document.getElementById('question-status').innerText = "";
+        
+        loadFighters();
+    }
+
+    function loadFighters() {
+        const d = data[activeCategory];
+        document.getElementById('champ-name').innerText = d.champ.name;
+        document.getElementById('champ-streak').innerText = d.champ.streak;
+        document.getElementById('chall-name').innerText = d.chall.name;
+        
+        const queueHtml = d.queue.length > 0 
+            ? d.queue.map(name => `<span class="bg-gray-800 px-3 py-1 rounded border border-gray-600">${name}</span>`).join('')
+            : `<span class="text-gray-500 italic">Không còn đối thủ</span>`;
+        document.getElementById('queue-display').innerHTML = queueHtml;
+    }
+
+    function getQuestion() {
+        const d = data[activeCategory];
+        if (!d) return;
+
+        const hasHistory = d.champ.history && d.champ.history[currentRound];
+        const btnSpin = document.getElementById('spin-btn');
+        const qText = document.getElementById('question-text');
+        const qStatus = document.getElementById('question-status');
+        const btnChot = document.getElementById('btn-chot');
+
+        btnSpin.classList.add('hidden');
+
+        if (hasHistory) {
+            currentQuestionText = d.champ.history[currentRound].q;
+            qText.innerText = currentQuestionText;
+            qStatus.innerText = "Kế thừa câu hỏi Đương kim vô địch đã trả lời";
+            applyLockedScores(d.champ.history[currentRound].scores);
+            btnChot.classList.remove('hidden');
+        } else {
+            if (d.questions.length === 0) {
+                qText.innerText = "Đã cạn kiệt ngân hàng câu hỏi!";
+                return;
+            }
+            
+            qStatus.innerText = "Đang quay câu hỏi mới...";
+            let counter = 0;
+            
+            let interval = setInterval(() => {
+                qText.innerText = `... Hệ thống đang quét bộ câu hỏi ...`;
+                qText.classList.add('text-center', 'text-blue-500');
+                counter++;
+                
+                if (counter > 8) {
+                    clearInterval(interval);
+                    let finalIndex = Math.floor(Math.random() * d.questions.length);
+                    currentQuestionText = d.questions[finalIndex];
+                    
+                    qText.innerText = currentQuestionText;
+                    qText.classList.remove('text-center', 'text-blue-500');
+                    qStatus.innerText = "Đã lấy câu hỏi mới từ ngân hàng.";
+                    
+                    d.questions.splice(finalIndex, 1);
+                    btnChot.classList.remove('hidden');
+                }
+            }, 100);
+        }
+    }
+
+    function applyLockedScores(scores) {
+        for(let i=1; i<=4; i++) {
+            document.getElementById(`c_s${i}`).value = scores[i-1];
+            document.getElementById(`c_val_${i}`).innerText = scores[i-1];
+        }
+        document.getElementById('champ-total').innerText = scores.reduce((a,b) => a+b, 0);
+        document.getElementById('panel-champ').classList.add('locked-panel');
+        document.getElementById('champ-badge-locked').classList.remove('hidden');
+    }
+
+    function updateScore(side) {
+        let total = 0;
+        for(let i=1; i<=4; i++) {
+            let val = parseInt(document.getElementById(`${side === 'champ' ? 'c' : 'ch'}_s${i}`).value);
+            document.getElementById(`${side === 'champ' ? 'c' : 'ch'}_val_${i}`).innerText = val;
+            total += val;
+        }
+        document.getElementById(`${side}-total`).innerText = total;
+    }
+
+    function chotDiem() {
+        let tChamp = parseInt(document.getElementById('champ-total').innerText);
+        let tChall = parseInt(document.getElementById('chall-total').innerText);
+        const d = data[activeCategory];
+
+        if (tChamp === tChall) { 
+            alert("Trận đấu không được phép hòa! Hãy phân định rõ ràng."); 
+            return; 
+        }
+
+        let challScores = [1,2,3,4].map(i => parseInt(document.getElementById(`ch_s${i}`).value));
+        d.chall.history.push({ q: currentQuestionText, scores: challScores });
+        
+        if (!d.champ.history[currentRound]) {
+            let champScores = [1,2,3,4].map(i => parseInt(document.getElementById(`c_s${i}`).value));
+            d.champ.history.push({ q: currentQuestionText, scores: champScores });
+        }
+
+        document.getElementById('btn-chot').classList.add('hidden');
+        currentRound++;
+
+        if (tChamp > tChall) { champScore++; updatePips('champ', champScore); } 
+        else { challScore++; updatePips('chall', challScore); }
+
+        if (champScore === 2 || challScore === 2) {
+            endMatch(champScore === 2 ? 'champ' : 'chall');
+        } else {
+            setTimeout(() => {
+                resetSliders();
+                document.getElementById('panel-champ').classList.remove('locked-panel');
+                document.getElementById('champ-badge-locked').classList.add('hidden');
+                document.getElementById('spin-btn').classList.remove('hidden');
+                document.getElementById('round-number').innerText = currentRound + 1;
+                document.getElementById('question-text').innerText = "Bấm 'Lấy Câu Hỏi' để tiếp tục Round " + (currentRound + 1);
+                document.getElementById('question-status').innerText = "";
+            }, 800);
+        }
+    }
+
+    function updatePips(side, score) {
+        if(score >= 1) document.getElementById(`${side === 'champ'?'c':'ch'}p1`).classList.add(`active-${side === 'champ'?'gold':'red'}`);
+        if(score >= 2) document.getElementById(`${side === 'champ'?'c':'ch'}p2`).classList.add(`active-${side === 'champ'?'gold':'red'}`);
+    }
+
+    function endMatch(winner) {
+        document.getElementById('main-arena').classList.add('match-over');
+        const d = data[activeCategory];
+        
+        setTimeout(() => {
+            let title, desc, color;
+            if (winner === 'champ') {
+                d.champ.streak++;
+                color = 'border-yellow-500 text-yellow-400 shadow-[0_0_50px_#eab308]';
+                title = `👑 ${d.champ.name} BẢO VỆ NGÔI VƯƠNG!`;
+                desc = `Chiến thắng ${champScore} - ${challScore}. Chuỗi thắng: ${d.champ.streak}`;
+                if(d.champ.streak >= 3) {
+                    let txt = document.getElementById('mega-kill-text');
+                    txt.classList.add('animate-mega-kill');
+                    setTimeout(() => txt.classList.remove('animate-mega-kill'), 2000);
+                }
+            } else {
+                color = 'border-red-500 text-red-500 shadow-[0_0_50px_#ef4444]';
+                title = `⚔️ TÂN VƯƠNG XUẤT HIỆN: ${d.chall.name}!`;
+                desc = `Đã lật đổ ngôi vương với tỉ số ${challScore} - ${champScore}.`;
+                d.champ = { name: d.chall.name, streak: 1, history: d.chall.history };
+            }
+            showPopup(title, desc, color);
+        }, 1000);
+    }
+
+    function showPopup(title, desc, color) {
+        let box = document.getElementById('popup-box');
+        box.className = `bg-gray-900 border-2 rounded-2xl p-8 text-center transform scale-95 transition-transform duration-300 ${color}`;
+        document.getElementById('popup-title').innerText = title; 
+        document.getElementById('popup-desc').innerText = desc;
+        
+        let popup = document.getElementById('popup-result');
+        popup.classList.remove('hidden');
+        setTimeout(() => { popup.classList.remove('opacity-0'); box.classList.remove('scale-95'); }, 50);
+    }
+
+    function closePopup() {
+        document.getElementById('popup-result').classList.add('opacity-0');
+        setTimeout(() => {
+            document.getElementById('popup-result').classList.add('hidden');
+            document.getElementById('btn-next').classList.remove('hidden');
+            document.getElementById('main-arena').classList.remove('match-over');
+        }, 300);
+    }
+
+    function startNextMatch() {
+        const d = data[activeCategory];
+        if (d.queue.length > 0) {
+            d.chall = { name: d.queue.shift(), history: [] };
+            champScore = 0; challScore = 0; currentRound = 0;
+            resetPips(); 
+            resetSliders();
+            
+            document.getElementById('panel-champ').classList.remove('locked-panel');
+            document.getElementById('champ-badge-locked').classList.add('hidden');
+            document.getElementById('btn-next').classList.add('hidden');
+            document.getElementById('spin-btn').classList.remove('hidden');
+            document.getElementById('round-number').innerText = 1;
+            document.getElementById('question-text').innerText = "Trận đấu mới đã sẵn sàng!";
+            document.getElementById('question-status').innerText = "";
+            
+            loadFighters();
+        } else {
+            alert("Đã hết danh sách đối thủ trong hàng chờ!");
+        }
+    }
+
+    function resetPips() { document.querySelectorAll('.pip').forEach(p => p.classList.remove('active-gold', 'active-red')); }
+    
+    function resetSliders() {
+        ['c', 'ch'].forEach(side => {
+            for(let i=1; i<=4; i++) {
+                document.getElementById(`${side}_s${i}`).value = 0;
+                document.getElementById(`${side}_val_${i}`).innerText = 0;
+            }
+        });
+        document.getElementById('champ-total').innerText = 0; 
+        document.getElementById('chall-total').innerText = 0;
+    }
+
+    // Chạy mặc định khi mở trang
+    switchCategory('oto');
+</script>
+</body>
+</html>
